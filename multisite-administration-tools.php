@@ -3,7 +3,7 @@
  * Plugin Name: MultiSite Administration Tools
  * Plugin URI:  https://wordpress.org/plugins/multisite-administration-tools/
  * Description: Adds information to the network admin sites, plugins and themes pages. Allows you to easily see what theme and plugins are enabled on a site.
- * Version:     1.20
+ * Version:     1.21
  * Author:      Aaron Axelsen
  * Author URI:  http://aaron.axelsen.us
  * License:     GPLv2 or later
@@ -47,20 +47,53 @@ function msadmintools_is_network_admin(): bool {
 function msadmintools_get_site_ids(): array {
         static $site_ids = null;
 
+        $batch_size = 200;
+
         if ($site_ids !== null) {
                 return $site_ids;
         }
 
-        $site_ids = get_sites([
-                'fields' => 'ids',
-                'number' => 0, // all
-        ]);
+        $site_ids = [];
 
-        if (!is_array($site_ids)) {
-                $site_ids = [];
+        $args = [
+                'fields' => 'ids',
+                'number' => $batch_size,
+                'offset' => 0,
+        ];
+
+        while (true) {
+                $batch = get_sites($args);
+
+                if (!is_array($batch) || empty($batch)) {
+                        break;
+                }
+
+                $site_ids = array_merge($site_ids, $batch);
+
+                if (count($batch) < $batch_size) {
+                        break;
+                }
+
+                $args['offset'] += $batch_size;
         }
 
         return $site_ids;
+}
+
+/**
+ * Switch to a blog and ensure we always restore the previous context.
+ */
+function msadmintools_with_blog(int $blog_id, callable $callback)
+{
+        $switched = switch_to_blog($blog_id);
+
+        try {
+                return $callback();
+        } finally {
+                if ($switched) {
+                        restore_current_blog();
+                }
+        }
 }
 
 /**
@@ -140,8 +173,8 @@ function msadmintools_sites_add_columns(array $columns): array {
                 return $columns;
         }
 
-        $columns['msadmintools_viewthemes']  = esc_html__('Current Theme', 'msadmintools');
-        $columns['msadmintools_viewplugins'] = esc_html__('Current Plugins', 'msadmintools');
+        $columns['msadmintools_viewthemes']  = esc_html__('Current Theme', 'multisite-administration-tools');
+        $columns['msadmintools_viewplugins'] = esc_html__('Current Plugins', 'multisite-administration-tools');
 
         return $columns;
 }
@@ -158,23 +191,32 @@ function msadmintools_sites_render_column(string $column_name, int $blog_id): vo
         msadmintools_require_admin_includes();
 
         if ($column_name === 'msadmintools_viewthemes') {
-                switch_to_blog($blog_id);
+                $theme_details = msadmintools_with_blog($blog_id, static function () {
+                        $theme = wp_get_theme();
 
-                $theme      = wp_get_theme();
-                $name       = $theme ? $theme->get('Name') : '';
-                $stylesheet = $theme ? $theme->get_stylesheet() : '';
-                $template   = $theme ? $theme->get_template() : '';
+                        return [
+                                'name' => $theme ? $theme->get('Name') : '',
+                                'stylesheet' => $theme ? $theme->get_stylesheet() : '',
+                                'template' => $theme ? $theme->get_template() : '',
+                        ];
+                });
 
-                restore_current_blog();
+                if (!is_array($theme_details)) {
+                        return;
+                }
+
+                $name       = (string) ($theme_details['name'] ?? '');
+                $stylesheet = (string) ($theme_details['stylesheet'] ?? '');
+                $template   = (string) ($theme_details['template'] ?? '');
 
                 if ($name !== '') {
-                        echo '<div><strong>' . esc_html__('Name:', 'msadmintools') . '</strong> ' . esc_html($name) . '</div>';
+                        echo '<div><strong>' . esc_html__('Name:', 'multisite-administration-tools') . '</strong> ' . esc_html($name) . '</div>';
                 }
                 if ($template !== '') {
-                        echo '<div><strong>' . esc_html__('Template:', 'msadmintools') . '</strong> ' . esc_html($template) . '</div>';
+                        echo '<div><strong>' . esc_html__('Template:', 'multisite-administration-tools') . '</strong> ' . esc_html($template) . '</div>';
                 }
                 if ($stylesheet !== '') {
-                        echo '<div><strong>' . esc_html__('Stylesheet:', 'msadmintools') . '</strong> ' . esc_html($stylesheet) . '</div>';
+                        echo '<div><strong>' . esc_html__('Stylesheet:', 'multisite-administration-tools') . '</strong> ' . esc_html($stylesheet) . '</div>';
                 }
 
                 return;
@@ -187,13 +229,13 @@ function msadmintools_sites_render_column(string $column_name, int $blog_id): vo
                 $all_plugins = get_plugins();
 
                 if (empty($active_plugins)) {
-                        echo '<em>' . esc_html__('None', 'msadmintools') . '</em>';
+                        echo '<em>' . esc_html__('None', 'multisite-administration-tools') . '</em>';
                         return;
                 }
 
                 // Use <details> so big lists don’t destroy the Sites table row height.
                 echo '<details>';
-                echo '<summary>' . esc_html(sprintf(_n('%d plugin', '%d plugins', count($active_plugins), 'msadmintools'), count($active_plugins))) . '</summary>';
+                echo '<summary>' . esc_html(sprintf(_n('%d plugin', '%d plugins', count($active_plugins), 'multisite-administration-tools'), count($active_plugins))) . '</summary>';
                 echo '<div style="margin-top:6px;">';
 
                 foreach ($active_plugins as $plugin_file) {
@@ -227,7 +269,7 @@ function msadmintools_themes_add_column(array $columns): array {
                 return $columns;
         }
 
-        $columns['msadmintools_viewsites'] = esc_html__('Sites', 'msadmintools');
+        $columns['msadmintools_viewsites'] = esc_html__('Sites', 'multisite-administration-tools');
         return $columns;
 }
 add_filter('manage_themes-network_columns', 'msadmintools_themes_add_column');
@@ -249,7 +291,7 @@ function msadmintools_themes_render_column(string $column_name, string $styleshe
 
         $sites = $theme_to_sites[$stylesheet] ?? [];
         if (empty($sites)) {
-                echo '<em>' . esc_html__('None', 'msadmintools') . '</em>';
+                echo '<em>' . esc_html__('None', 'multisite-administration-tools') . '</em>';
                 return;
         }
 
@@ -269,7 +311,7 @@ function msadmintools_plugins_add_column(array $columns): array {
                 return $columns;
         }
 
-        $columns['msadmintools_viewsites'] = esc_html__('Sites', 'msadmintools');
+        $columns['msadmintools_viewsites'] = esc_html__('Sites', 'multisite-administration-tools');
         return $columns;
 }
 add_filter('manage_plugins-network_columns', 'msadmintools_plugins_add_column');
@@ -291,7 +333,7 @@ function msadmintools_plugins_render_column(string $column_name, string $plugin_
 
         $sites = $plugin_to_sites[$plugin_file] ?? [];
         if (empty($sites)) {
-                echo '<em>' . esc_html__('None', 'msadmintools') . '</em>';
+                echo '<em>' . esc_html__('None', 'multisite-administration-tools') . '</em>';
                 return;
         }
 
