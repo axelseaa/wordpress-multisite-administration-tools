@@ -4,7 +4,7 @@ Tags: multisite, admintools, network, plugins, themes
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.2
-Stable tag: 1.20
+Stable tag: 1.21
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -26,6 +26,10 @@ This plugin can only be "Network Activated". Install the plugin into the `/wp-co
 
 == Changelog ==
 
+= 1.21 =
+* Harden blog context switching and align translation text domain usage.
+* Batch site indexing queries to improve performance on large networks.
+
 = 1.20 =
 * Compatibility updates for current WordPress multisite Network Admin screens.
 * Improved handling of theme and plugin reporting across sites.
@@ -39,6 +43,9 @@ This plugin can only be "Network Activated". Install the plugin into the `/wp-co
 * Initial release
 
 == Upgrade Notice ==
+
+= 1.21 =
+Improves multisite safety and performance for Network Admin reporting.
 
 = 1.20 =
 Compatibility and performance improvements for multisite Network Admin reporting.

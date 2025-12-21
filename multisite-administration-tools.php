@@ -3,7 +3,7 @@
  * Plugin Name: MultiSite Administration Tools
  * Plugin URI:  https://wordpress.org/plugins/multisite-administration-tools/
  * Description: Adds information to the network admin sites, plugins and themes pages. Allows you to easily see what theme and plugins are enabled on a site.
- * Version:     1.20
+ * Version:     1.21
  * Author:      Aaron Axelsen
  * Author URI:  http://aaron.axelsen.us
  * License:     GPLv2 or later
