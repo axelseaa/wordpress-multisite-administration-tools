@@ -4,7 +4,7 @@ Tags: multisite, admintools, network, plugins, themes
 Requires at least: 5.8
 Tested up to: 6.9
 Requires PHP: 7.2
-Stable tag: 1.21
+Stable tag: 1.22
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -26,6 +26,11 @@ This plugin can only be "Network Activated". Install the plugin into the `/wp-co
 
 == Changelog ==
 
+= 1.22 =
+* Added an `Admin Users` column on the Network Sites table to show administrator email addresses per site.
+* Added CSV export support on the Network Sites page for site details, theme details, active plugins, and admin email addresses.
+* Added nonce/capability checks for secure export handling.
+
 = 1.21 =
 * Harden blog context switching and align translation text domain usage.
 * Batch site indexing queries to improve performance on large networks.
@@ -43,6 +48,9 @@ This plugin can only be "Network Activated". Install the plugin into the `/wp-co
 * Initial release
 
 == Upgrade Notice ==
+
+= 1.22 =
+Adds site admin-email visibility on the Network Sites screen and a new CSV export action.
 
 = 1.21 =
 Improves multisite safety and performance for Network Admin reporting.
