@@ -345,22 +345,7 @@ function msadmintools_sites_export_button(string $which): void {
         echo '</div>';
 }
 add_action('manage_sites-network_extra_tablenav', 'msadmintools_sites_export_button');
-
-/**
- * Neutralize CSV values that spreadsheet apps could interpret as formulas.
- */
-function msadmintools_escape_csv_cell(string $value): string {
-        if ($value === '') {
-                return $value;
-        }
-
-        $first_char = $value[0];
-        if (in_array($first_char, ['=', '+', '-', '@', "\t", "\r", "\n"], true)) {
-                return "'" . $value;
-        }
-
-        return $value;
-}
+add_action('manage_sites_extra_tablenav', 'msadmintools_sites_export_button');
 
 /**
  * Handle Sites CSV export request.
