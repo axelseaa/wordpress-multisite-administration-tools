@@ -348,6 +348,22 @@ function msadmintools_sites_export_notice(): void {
 add_action('network_admin_notices', 'msadmintools_sites_export_notice');
 
 /**
+ * Neutralize CSV values that spreadsheet apps could interpret as formulas.
+ */
+function msadmintools_escape_csv_cell(string $value): string {
+        if ($value === '') {
+                return $value;
+        }
+
+        $first_char = $value[0];
+        if (in_array($first_char, ['=', '+', '-', '@', "\t", "\r", "\n"], true)) {
+                return "'" . $value;
+        }
+
+        return $value;
+}
+
+/**
  * Handle Sites CSV export request.
  */
 function msadmintools_sites_export_csv(): void {
@@ -423,13 +439,13 @@ function msadmintools_sites_export_csv(): void {
 
                 fputcsv($output, [
                         $blog_id,
-                        $site_name,
-                        $site_url,
-                        (string) ($theme_details['name'] ?? ''),
-                        (string) ($theme_details['template'] ?? ''),
-                        (string) ($theme_details['stylesheet'] ?? ''),
-                        implode('; ', $plugin_names),
-                        implode('; ', $admin_emails),
+                        msadmintools_escape_csv_cell($site_name),
+                        msadmintools_escape_csv_cell((string) $site_url),
+                        msadmintools_escape_csv_cell((string) ($theme_details['name'] ?? '')),
+                        msadmintools_escape_csv_cell((string) ($theme_details['template'] ?? '')),
+                        msadmintools_escape_csv_cell((string) ($theme_details['stylesheet'] ?? '')),
+                        msadmintools_escape_csv_cell(implode('; ', $plugin_names)),
+                        msadmintools_escape_csv_cell(implode('; ', $admin_emails)),
                 ]);
         }
 
