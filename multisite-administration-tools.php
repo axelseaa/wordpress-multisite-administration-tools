@@ -81,6 +81,79 @@ function msadmintools_get_site_ids(): array {
 }
 
 /**
+ * Build a safe get_sites() query arg array from the current Sites list filter state.
+ */
+function msadmintools_get_sites_query_args_from_request(): array {
+        $args = [];
+
+        $status = isset($_GET['status']) ? sanitize_key((string) $_GET['status']) : '';
+
+        $status_map = [
+                'public' => ['public' => 1],
+                'archived' => ['archived' => 1],
+                'mature' => ['mature' => 1],
+                'spam' => ['spam' => 1],
+                'deleted' => ['deleted' => 1],
+        ];
+
+        if ($status !== '' && isset($status_map[$status])) {
+                $args = array_merge($args, $status_map[$status]);
+        }
+
+        // Support direct query vars when present (e.g., custom links/bookmarks).
+        $flag_keys = ['public', 'archived', 'mature', 'spam', 'deleted'];
+        foreach ($flag_keys as $flag_key) {
+                if (!array_key_exists($flag_key, $args) && isset($_GET[$flag_key])) {
+                        $flag_value = (int) $_GET[$flag_key];
+                        if ($flag_value === 0 || $flag_value === 1) {
+                                $args[$flag_key] = $flag_value;
+                        }
+                }
+        }
+
+        if (isset($_GET['s'])) {
+                $search = sanitize_text_field(wp_unslash((string) $_GET['s']));
+                if ($search !== '') {
+                        $args['search'] = $search;
+                }
+        }
+
+        return $args;
+}
+
+/**
+ * Fetch all site IDs for a given query by paging through get_sites().
+ */
+function msadmintools_get_site_ids_for_query(array $query_args = []): array {
+        $batch_size = 200;
+        $site_ids = [];
+
+        $args = array_merge($query_args, [
+                'fields' => 'ids',
+                'number' => $batch_size,
+                'offset' => 0,
+        ]);
+
+        while (true) {
+                $batch = get_sites($args);
+
+                if (!is_array($batch) || empty($batch)) {
+                        break;
+                }
+
+                $site_ids = array_merge($site_ids, $batch);
+
+                if (count($batch) < $batch_size) {
+                        break;
+                }
+
+                $args['offset'] += $batch_size;
+        }
+
+        return $site_ids;
+}
+
+/**
  * Switch to a blog and ensure we always restore the previous context.
  */
 function msadmintools_with_blog(int $blog_id, callable $callback)
@@ -333,8 +406,19 @@ function msadmintools_sites_export_button(string $which = 'top'): void {
                 return;
         }
 
+        $export_query_args = [
+                'msadmintools_export' => 'csv',
+        ];
+
+        if (isset($_GET['status'])) {
+                $export_query_args['status'] = sanitize_key((string) $_GET['status']);
+        }
+        if (isset($_GET['s'])) {
+                $export_query_args['s'] = sanitize_text_field(wp_unslash((string) $_GET['s']));
+        }
+
         $export_url = wp_nonce_url(
-                network_admin_url('sites.php?msadmintools_export=csv'),
+                add_query_arg($export_query_args, network_admin_url('sites.php')),
                 'msadmintools_export_sites_csv'
         );
 
@@ -405,7 +489,9 @@ function msadmintools_sites_export_csv(): void {
 
         $all_plugins = get_plugins();
 
-        foreach (msadmintools_get_site_ids() as $blog_id) {
+        $query_args = msadmintools_get_sites_query_args_from_request();
+
+        foreach (msadmintools_get_site_ids_for_query($query_args) as $blog_id) {
                 $blog_id = (int) $blog_id;
                 $site_name = (string) get_blog_option($blog_id, 'blogname', '');
                 $site_url = get_site_url($blog_id, '/');
