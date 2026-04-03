@@ -318,15 +318,14 @@ function msadmintools_get_site_admin_emails(int $blog_id): array {
 }
 
 /**
- * Add a CSV export action link to the network Sites screen.
+ * Add a CSV export action button to the network Sites list table toolbar.
  */
-function msadmintools_sites_export_notice(): void {
+function msadmintools_sites_export_button(string $which): void {
         if (!msadmintools_is_network_admin()) {
                 return;
         }
 
-        $screen = function_exists('get_current_screen') ? get_current_screen() : null;
-        if (!$screen || $screen->id !== 'sites-network') {
+        if ($which !== 'top') {
                 return;
         }
 
@@ -339,13 +338,29 @@ function msadmintools_sites_export_notice(): void {
                 'msadmintools_export_sites_csv'
         );
 
-        echo '<div class="notice notice-info inline"><p>';
-        echo '<a class="button button-secondary" href="' . esc_url($export_url) . '">' .
+        echo '<div class="alignleft actions">';
+        echo '<a class="button action" href="' . esc_url($export_url) . '">' .
                 esc_html__('Export Sites Data (CSV)', 'multisite-administration-tools') .
                 '</a>';
-        echo '</p></div>';
+        echo '</div>';
 }
-add_action('network_admin_notices', 'msadmintools_sites_export_notice');
+add_action('manage_sites-network_extra_tablenav', 'msadmintools_sites_export_button');
+
+/**
+ * Neutralize CSV values that spreadsheet apps could interpret as formulas.
+ */
+function msadmintools_escape_csv_cell(string $value): string {
+        if ($value === '') {
+                return $value;
+        }
+
+        $first_char = $value[0];
+        if (in_array($first_char, ['=', '+', '-', '@', "\t", "\r", "\n"], true)) {
+                return "'" . $value;
+        }
+
+        return $value;
+}
 
 /**
  * Neutralize CSV values that spreadsheet apps could interpret as formulas.
