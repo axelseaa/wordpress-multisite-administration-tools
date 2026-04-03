@@ -3,7 +3,7 @@
  * Plugin Name: MultiSite Administration Tools
  * Plugin URI:  https://wordpress.org/plugins/multisite-administration-tools/
  * Description: Adds information to the network admin sites, plugins and themes pages. Allows you to easily see what theme and plugins are enabled on a site.
- * Version:     1.21
+ * Version:     1.22
  * Author:      Aaron Axelsen
  * Author URI:  http://aaron.axelsen.us
  * License:     GPLv2 or later
@@ -175,6 +175,7 @@ function msadmintools_sites_add_columns(array $columns): array {
 
         $columns['msadmintools_viewthemes']  = esc_html__('Current Theme', 'multisite-administration-tools');
         $columns['msadmintools_viewplugins'] = esc_html__('Current Plugins', 'multisite-administration-tools');
+        $columns['msadmintools_viewadmins']  = esc_html__('Admin Users', 'multisite-administration-tools');
 
         return $columns;
 }
@@ -256,8 +257,186 @@ function msadmintools_sites_render_column(string $column_name, int $blog_id): vo
 
                 return;
         }
+
+        if ($column_name === 'msadmintools_viewadmins') {
+                $admin_emails = msadmintools_get_site_admin_emails($blog_id);
+
+                if (empty($admin_emails)) {
+                        echo '<em>' . esc_html__('None', 'multisite-administration-tools') . '</em>';
+                        return;
+                }
+
+                echo '<details>';
+                echo '<summary>' . esc_html(sprintf(_n('%d admin', '%d admins', count($admin_emails), 'multisite-administration-tools'), count($admin_emails))) . '</summary>';
+                echo '<div style="margin-top:6px;">';
+
+                foreach ($admin_emails as $admin_email) {
+                        echo esc_html($admin_email) . '<br>';
+                }
+
+                echo '</div>';
+                echo '</details>';
+        }
 }
 add_action('manage_sites_custom_column', 'msadmintools_sites_render_column', 10, 2);
+
+/**
+ * Get administrator email addresses for one site.
+ */
+function msadmintools_get_site_admin_emails(int $blog_id): array {
+        $emails = msadmintools_with_blog($blog_id, static function (): array {
+                $users = get_users([
+                        'role' => 'administrator',
+                        'fields' => ['user_email'],
+                        'orderby' => 'user_email',
+                        'order' => 'ASC',
+                ]);
+
+                if (!is_array($users) || empty($users)) {
+                        return [];
+                }
+
+                $emails = [];
+                foreach ($users as $user) {
+                        $email = is_object($user) ? (string) ($user->user_email ?? '') : '';
+                        if ($email !== '') {
+                                $emails[] = $email;
+                        }
+                }
+
+                return $emails;
+        });
+
+        if (!is_array($emails) || empty($emails)) {
+                return [];
+        }
+
+        $emails = array_values(array_unique($emails));
+        sort($emails, SORT_NATURAL | SORT_FLAG_CASE);
+
+        return $emails;
+}
+
+/**
+ * Add a CSV export action link to the network Sites screen.
+ */
+function msadmintools_sites_export_notice(): void {
+        if (!msadmintools_is_network_admin()) {
+                return;
+        }
+
+        $screen = function_exists('get_current_screen') ? get_current_screen() : null;
+        if (!$screen || $screen->id !== 'sites-network') {
+                return;
+        }
+
+        if (!current_user_can('manage_sites')) {
+                return;
+        }
+
+        $export_url = wp_nonce_url(
+                network_admin_url('sites.php?msadmintools_export=csv'),
+                'msadmintools_export_sites_csv'
+        );
+
+        echo '<div class="notice notice-info inline"><p>';
+        echo '<a class="button button-secondary" href="' . esc_url($export_url) . '">' .
+                esc_html__('Export Sites Data (CSV)', 'multisite-administration-tools') .
+                '</a>';
+        echo '</p></div>';
+}
+add_action('network_admin_notices', 'msadmintools_sites_export_notice');
+
+/**
+ * Handle Sites CSV export request.
+ */
+function msadmintools_sites_export_csv(): void {
+        if (!msadmintools_is_network_admin()) {
+                return;
+        }
+
+        if (!isset($_GET['msadmintools_export']) || $_GET['msadmintools_export'] !== 'csv') {
+                return;
+        }
+
+        if (!current_user_can('manage_sites')) {
+                wp_die(esc_html__('You do not have permission to export site data.', 'multisite-administration-tools'));
+        }
+
+        check_admin_referer('msadmintools_export_sites_csv');
+        msadmintools_require_admin_includes();
+
+        $filename = 'network-sites-export-' . gmdate('Y-m-d-His') . '.csv';
+        nocache_headers();
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename=' . $filename);
+
+        $output = fopen('php://output', 'w');
+        if ($output === false) {
+                wp_die(esc_html__('Could not create export file.', 'multisite-administration-tools'));
+        }
+
+        fputcsv($output, [
+                'Site ID',
+                'Site Name',
+                'Site URL',
+                'Theme Name',
+                'Theme Template',
+                'Theme Stylesheet',
+                'Active Plugins',
+                'Admin Emails',
+        ]);
+
+        $all_plugins = get_plugins();
+
+        foreach (msadmintools_get_site_ids() as $blog_id) {
+                $blog_id = (int) $blog_id;
+                $site_name = (string) get_blog_option($blog_id, 'blogname', '');
+                $site_url = get_site_url($blog_id, '/');
+
+                $theme_details = msadmintools_with_blog($blog_id, static function (): array {
+                        $theme = wp_get_theme();
+                        if (!$theme) {
+                                return [];
+                        }
+
+                        return [
+                                'name' => (string) $theme->get('Name'),
+                                'template' => (string) $theme->get_template(),
+                                'stylesheet' => (string) $theme->get_stylesheet(),
+                        ];
+                });
+
+                $active_plugins = (array) get_blog_option($blog_id, 'active_plugins', []);
+                $plugin_names = [];
+                foreach ($active_plugins as $plugin_file) {
+                        $plugin_file = (string) $plugin_file;
+                        if ($plugin_file === '') {
+                                continue;
+                        }
+                        $plugin_names[] = isset($all_plugins[$plugin_file]['Name'])
+                                ? (string) $all_plugins[$plugin_file]['Name']
+                                : $plugin_file . ' (removed)';
+                }
+
+                $admin_emails = msadmintools_get_site_admin_emails($blog_id);
+
+                fputcsv($output, [
+                        $blog_id,
+                        $site_name,
+                        $site_url,
+                        (string) ($theme_details['name'] ?? ''),
+                        (string) ($theme_details['template'] ?? ''),
+                        (string) ($theme_details['stylesheet'] ?? ''),
+                        implode('; ', $plugin_names),
+                        implode('; ', $admin_emails),
+                ]);
+        }
+
+        fclose($output);
+        exit;
+}
+add_action('admin_init', 'msadmintools_sites_export_csv');
 
 /**
  * =========================
