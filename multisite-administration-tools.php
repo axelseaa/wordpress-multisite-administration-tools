@@ -345,8 +345,6 @@ function msadmintools_sites_export_button(string $which = 'top'): void {
         echo '</div>';
 }
 add_action('manage_sites-network_extra_tablenav', 'msadmintools_sites_export_button');
-add_action('manage_sites_extra_tablenav', 'msadmintools_sites_export_button');
-add_action('restrict_manage_sites', 'msadmintools_sites_export_button');
 
 /**
  * Neutralize CSV values that spreadsheet apps could interpret as formulas.
