@@ -320,12 +320,12 @@ function msadmintools_get_site_admin_emails(int $blog_id): array {
 /**
  * Add a CSV export action button to the network Sites list table toolbar.
  */
-function msadmintools_sites_export_button(string $which): void {
+function msadmintools_sites_export_button(string $which = 'top'): void {
         if (!msadmintools_is_network_admin()) {
                 return;
         }
 
-        if ($which !== 'top') {
+        if ($which !== '' && $which !== 'top') {
                 return;
         }
 
@@ -346,6 +346,23 @@ function msadmintools_sites_export_button(string $which): void {
 }
 add_action('manage_sites-network_extra_tablenav', 'msadmintools_sites_export_button');
 add_action('manage_sites_extra_tablenav', 'msadmintools_sites_export_button');
+add_action('restrict_manage_sites', 'msadmintools_sites_export_button');
+
+/**
+ * Neutralize CSV values that spreadsheet apps could interpret as formulas.
+ */
+function msadmintools_escape_csv_cell(string $value): string {
+        if ($value === '') {
+                return $value;
+        }
+
+        $first_char = $value[0];
+        if (in_array($first_char, ['=', '+', '-', '@', "\t", "\r", "\n"], true)) {
+                return "'" . $value;
+        }
+
+        return $value;
+}
 
 /**
  * Handle Sites CSV export request.
