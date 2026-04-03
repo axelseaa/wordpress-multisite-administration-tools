@@ -363,22 +363,6 @@ function msadmintools_escape_csv_cell(string $value): string {
 }
 
 /**
- * Neutralize CSV values that spreadsheet apps could interpret as formulas.
- */
-function msadmintools_escape_csv_cell(string $value): string {
-        if ($value === '') {
-                return $value;
-        }
-
-        $first_char = $value[0];
-        if (in_array($first_char, ['=', '+', '-', '@', "\t", "\r", "\n"], true)) {
-                return "'" . $value;
-        }
-
-        return $value;
-}
-
-/**
  * Handle Sites CSV export request.
  */
 function msadmintools_sites_export_csv(): void {
