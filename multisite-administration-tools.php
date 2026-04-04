@@ -35,6 +35,26 @@ function msadmintools_require_admin_includes(): void {
 }
 
 /**
+ * Get all plugin headers once per request.
+ */
+function msadmintools_get_all_plugins(): array {
+        static $all_plugins = null;
+
+        if ($all_plugins !== null) {
+                return $all_plugins;
+        }
+
+        msadmintools_require_admin_includes();
+        $all_plugins = get_plugins();
+
+        if (!is_array($all_plugins)) {
+                $all_plugins = [];
+        }
+
+        return $all_plugins;
+}
+
+/**
  * Only run on network admin screens.
  */
 function msadmintools_is_network_admin(): bool {
@@ -204,6 +224,16 @@ function msadmintools_get_indexes(): array {
                 return [$theme_to_sites, $plugin_to_sites];
         }
 
+        $cache_key = msadmintools_get_indexes_cache_key();
+        $cached = get_transient($cache_key);
+        if (is_array($cached)) {
+                $theme_to_sites = (array) ($cached['theme_to_sites'] ?? []);
+                $plugin_to_sites = (array) ($cached['plugin_to_sites'] ?? []);
+                $built = true;
+
+                return [$theme_to_sites, $plugin_to_sites];
+        }
+
         $built = true;
 
         $site_ids = msadmintools_get_site_ids();
@@ -233,8 +263,33 @@ function msadmintools_get_indexes(): array {
                 }
         }
 
+        set_transient($cache_key, [
+                'theme_to_sites' => $theme_to_sites,
+                'plugin_to_sites' => $plugin_to_sites,
+        ], 10 * MINUTE_IN_SECONDS);
+
         return [$theme_to_sites, $plugin_to_sites];
 }
+
+/**
+ * Build a network-specific transient key for index caching.
+ */
+function msadmintools_get_indexes_cache_key(): string {
+        return 'msadmintools_indexes_' . (string) get_current_network_id();
+}
+
+/**
+ * Invalidate transient index cache.
+ */
+function msadmintools_invalidate_indexes_cache(): void {
+        delete_transient(msadmintools_get_indexes_cache_key());
+}
+add_action('update_option_active_plugins', 'msadmintools_invalidate_indexes_cache');
+add_action('add_option_active_plugins', 'msadmintools_invalidate_indexes_cache');
+add_action('delete_option_active_plugins', 'msadmintools_invalidate_indexes_cache');
+add_action('switch_theme', 'msadmintools_invalidate_indexes_cache');
+add_action('wp_initialize_site', 'msadmintools_invalidate_indexes_cache');
+add_action('wp_delete_site', 'msadmintools_invalidate_indexes_cache');
 
 /**
  * =========================
@@ -299,8 +354,8 @@ function msadmintools_sites_render_column(string $column_name, int $blog_id): vo
         if ($column_name === 'msadmintools_viewplugins') {
                 $active_plugins = (array) get_blog_option($blog_id, 'active_plugins', []);
 
-                // Load all plugin headers once.
-                $all_plugins = get_plugins();
+                // Load all plugin headers once per request.
+                $all_plugins = msadmintools_get_all_plugins();
 
                 if (empty($active_plugins)) {
                         echo '<em>' . esc_html__('None', 'multisite-administration-tools') . '</em>';
@@ -487,7 +542,7 @@ function msadmintools_sites_export_csv(): void {
                 'Admin Emails',
         ]);
 
-        $all_plugins = get_plugins();
+        $all_plugins = msadmintools_get_all_plugins();
 
         $query_args = msadmintools_get_sites_query_args_from_request();
 
